@@ -4,6 +4,14 @@ from time import sleep
 
 import sys
 
+import json
+
+def handler(request):
+	return {
+		"statusCode": 200,
+		"headers": {"Content-Type": "application/json"},
+		"body": json.dumps({"message": "Hello from Vercel!"}),
+	}
 
 
 def address_to_string(address):
