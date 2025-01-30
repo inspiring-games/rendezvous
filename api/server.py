@@ -1,8 +1,8 @@
-from twisted.internet.protocol import DatagramProtocol
+'''from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
 from time import sleep
 
-import sys
+import sys'''
 
 import json
 
@@ -12,7 +12,7 @@ def handler(request):
 		"headers": {"Content-Type": "application/json"},
 		"body": json.dumps({"message": "Hello from Vercel!"}),
 	}
-
+'''
 
 def address_to_string(address):
 	ip, port = address
@@ -158,3 +158,4 @@ if __name__ == '__main__':
 	reactor.listenUDP(port, ServerProtocol())
 	print('Listening on *:%d' % (port))
 	reactor.run()
+'''
