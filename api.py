@@ -22,7 +22,7 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
-@app.post("/Register")
+@app.post("/register")
 async def register(request: Request):
     """Handles a POST request to register data, adding a timestamp and removing expired entries."""
     data = load_data()
@@ -41,8 +41,8 @@ async def register(request: Request):
     save_data(data)
     return {"status": "success", "message": "Data registered", "entries": len(data)}
 
-@app.get("/List")
-@app.post("/List")
+@app.get("/list")
+@app.post("lList")
 async def list_data(
     request: Request,
     sort: str = Query(None),
