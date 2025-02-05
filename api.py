@@ -42,7 +42,7 @@ async def register(request: Request):
     return {"status": "success", "message": "Data registered", "entries": len(data)}
 
 @app.get("/list")
-@app.post("lList")
+@app.post("/list")
 async def list_data(
     request: Request,
     sort: str = Query(None),
