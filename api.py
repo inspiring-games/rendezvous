@@ -1,57 +1,57 @@
-import requests
 import json
-from fastapi import FastAPI, Request
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
+import firebase_admin
+from firebase_admin import credentials, db
+from fastapi import FastAPI, Request
 
 app = FastAPI()
 
-# Gist details
-GIST_ID = "dffa549bb0ddd4e06d38c87319349994"
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # Store this in Vercel's environment variables
-GIST_URL = f"https://api.github.com/gists/{GIST_ID}"
-HEADERS = {"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
+# Initialize Firebase
+firebase_json = os.getenv("FIREBASE_CREDENTIALS")
+if not firebase_json:
+    raise ValueError("Missing FIREBASE_CREDENTIALS in environment variables")
 
-def fetch_data():
-    """Fetches current JSON data from the Gist."""
-    response = requests.get(GIST_URL)
-    if response.status_code == 200:
-        gist_content = response.json()
-        return json.loads(gist_content["files"]["data.json"]["content"])
-    return []
+cred = credentials.Certificate(json.loads(firebase_json))  # Load from Vercel env
+firebase_admin.initialize_app(cred, {"databaseURL": "https://your-project-id.firebaseio.com"})
 
-def save_data(data):
-    """Updates the Gist with new JSON data."""
-    payload = {
-        "files": {
-            "data.json": {
-                "content": json.dumps(data, indent=4)
-            }
-        }
-    }
-    response = requests.patch(GIST_URL, headers=HEADERS, json=payload)
-    return response.status_code == 200
+# Firebase Database Reference
+DATA_REF = db.reference("entries")  # Path where we'll store data
+
+
+def clean_old_entries():
+    """Remove entries older than 5 minutes."""
+    now = datetime.utcnow()
+    cutoff = now - timedelta(minutes=5)
+    
+    all_entries = DATA_REF.get() or {}  # Fetch all data
+    updated_entries = {key: value for key, value in all_entries.items() if datetime.fromisoformat(value["timestamp"]) > cutoff}
+
+    DATA_REF.set(updated_entries)  # Save back to Firebase
+
 
 @app.post("/register")
 async def register(request: Request):
-    """Handles a POST request to register data, adding a timestamp and removing expired entries."""
-    data = fetch_data()
+    """Register new data with a timestamp and clean old entries."""
     new_entry = await request.json()
+    
+    if not isinstance(new_entry, dict):
+        return {"status": "error", "message": "Invalid JSON format"}
+
     new_entry["timestamp"] = datetime.utcnow().isoformat()
-    data.append(new_entry)
+    entry_id = DATA_REF.push(new_entry)  # Push new entry with unique key
 
-    # Remove expired entries (older than 5 minutes)
-    cutoff = datetime.utcnow() - timedelta(minutes=5)
-    data = [entry for entry in data if datetime.fromisoformat(entry["timestamp"]) > cutoff]
+    clean_old_entries()  # Remove expired entries
 
-    if save_data(data):
-        return {"status": "success", "entries": len(data)}
-    return {"status": "error", "message": "Failed to update data"}
+    return {"status": "success", "id": entry_id.key}
+
 
 @app.get("/list")
 async def list_data(sort: str = None, order: str = "asc", filter: str = None):
-    """Returns the stored data, with optional sorting and filtering."""
-    data = fetch_data()
+    """Returns stored data with optional sorting and filtering."""
+    entries = DATA_REF.get() or {}
+
+    data = list(entries.values())  # Convert dict to list
 
     # Apply filtering
     if filter:
