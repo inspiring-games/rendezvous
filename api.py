@@ -13,7 +13,7 @@ if not firebase_json:
     raise ValueError("Missing FIREBASE_CREDENTIALS in environment variables")
 
 cred = credentials.Certificate(json.loads(firebase_json))  # Load from Vercel env
-firebase_admin.initialize_app(cred, {"databaseURL": "https://your-project-id.firebaseio.com"})
+firebase_admin.initialize_app(cred, {"databaseURL": "https://game-lobby-75ba5-default-rtdb.firebaseio.com/"})
 
 # Firebase Database Reference
 DATA_REF = db.reference("entries")  # Path where we'll store data
