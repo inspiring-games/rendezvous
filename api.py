@@ -1,10 +1,10 @@
-from fastapi import FastAPI, Request, Query
+from fastapi import FastAPI, Request
 from datetime import datetime, timedelta
 import json
 import os
 
 app = FastAPI()
-DATA_FILE = "data.json"
+DATA_FILE = "/tmp/data.json"  # Use /tmp/ for write permissions in Vercel
 EXPIRATION_MINUTES = 5
 
 def load_data():
@@ -43,24 +43,6 @@ async def register(request: Request):
 
 @app.get("/list")
 @app.post("/list")
-async def list_data(
-    request: Request,
-    sort: str = Query(None),
-    order: str = Query("asc"),
-    filter_key: str = Query(None, alias="filter")
-):
+async def list_data(request: Request, sort: str = None, order: str = "asc", filter_key: str = None):
     """Lists the stored data with optional sorting and filtering."""
-    data = load_data()
-
-    # Apply filtering
-    if filter_key:
-        data = [entry for entry in data if filter_key in entry]
-
-    # Apply sorting
-    if sort:
-        try:
-            data.sort(key=lambda x: x.get(sort, ""), reverse=(order == "desc"))
-        except TypeError:
-            pass  # If sorting fails due to incompatible types, just skip sorting.
-
-    return data
+    data =
