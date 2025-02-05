@@ -1,81 +1,67 @@
+import requests
+import json
 from fastapi import FastAPI, Request
 from datetime import datetime, timedelta
-import json
 import os
 
 app = FastAPI()
-DATA_FILE = "/tmp/data.json"  # Must use /tmp/ in Vercel
-EXPIRATION_MINUTES = 5
 
-def load_data():
-    """Loads JSON data from file, or returns an empty list if the file doesn't exist."""
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return []  # Reset if file is corrupted
+# Gist details
+GIST_ID = "dffa549bb0ddd4e06d38c87319349994"
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # Store this in Vercel's environment variables
+GIST_URL = f"https://api.github.com/gists/{GIST_ID}"
+HEADERS = {"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
+
+def fetch_data():
+    """Fetches current JSON data from the Gist."""
+    response = requests.get(GIST_URL)
+    if response.status_code == 200:
+        gist_content = response.json()
+        return json.loads(gist_content["files"]["data.json"]["content"])
     return []
 
 def save_data(data):
-    """Saves JSON data to file with error handling."""
-    try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
-    except Exception as e:
-        print("Error writing data file:", e)  # Debug log
+    """Updates the Gist with new JSON data."""
+    payload = {
+        "files": {
+            "data.json": {
+                "content": json.dumps(data, indent=4)
+            }
+        }
+    }
+    response = requests.patch(GIST_URL, headers=HEADERS, json=payload)
+    return response.status_code == 200
 
 @app.post("/register")
 async def register(request: Request):
     """Handles a POST request to register data, adding a timestamp and removing expired entries."""
-    try:
-        data = load_data()
-        new_entry = await request.json()
-        
-        # Add timestamp safely
-        new_entry["timestamp"] = datetime.utcnow().isoformat()
+    data = fetch_data()
+    new_entry = await request.json()
+    new_entry["timestamp"] = datetime.utcnow().isoformat()
+    data.append(new_entry)
 
-        # Append new entry
-        data.append(new_entry)
+    # Remove expired entries (older than 5 minutes)
+    cutoff = datetime.utcnow() - timedelta(minutes=5)
+    data = [entry for entry in data if datetime.fromisoformat(entry["timestamp"]) > cutoff]
 
-        # Remove expired entries
-        cutoff = datetime.utcnow() - timedelta(minutes=EXPIRATION_MINUTES)
-        filtered_data = []
-        
-        for entry in data:
-            try:
-                entry_time = datetime.fromisoformat(entry["timestamp"])
-                if entry_time > cutoff:
-                    filtered_data.append(entry)
-            except Exception as e:
-                print("Skipping invalid entry:", e)  # Debugging
-        
-        save_data(filtered_data)
-        return {"status": "success", "message": "Data registered", "entries": len(filtered_data)}
-
-    except Exception as e:
-        print("Register API Error:", e)  # Debug log
-        return {"status": "error", "message": "Server error"}
+    if save_data(data):
+        return {"status": "success", "entries": len(data)}
+    return {"status": "error", "message": "Failed to update data"}
 
 @app.get("/list")
-@app.post("/list")
-async def list_data(request: Request, sort: str = None, order: str = "asc", filter_key: str = None):
-    """Lists the stored data with optional sorting and filtering."""
-    try:
-        data = load_data()
+async def list_data(sort: str = None, order: str = "asc", filter: str = None):
+    """Returns the stored data, with optional sorting and filtering."""
+    data = fetch_data()
 
-        # Apply filtering
-        if filter_key:
-            data = [entry for entry in data if filter_key in entry]
+    # Apply filtering
+    if filter:
+        data = [entry for entry in data if filter in entry]
 
-        # Apply sorting
-        if sort:
-            try:
-                data.sort(key=lambda x: x.get(sort, ""), reverse=(order == "desc"))
-            except TypeError:
-                pass  # Ignore sorting errors
+    # Apply sorting
+    if sort:
+        try:
+            data.sort(key=lambda x: x.get(sort, ""), reverse=(order == "desc"))
+        except Exception as e:
+            return {"error": f"Sorting failed: {str(e)}"}
 
-        return data
-    except Exception as e:
-        print("List API Error:", e)  # Debugging
-        return {"status": "error", "message": "Server error"}
+    return data
